@@ -153,6 +153,9 @@ class ScreenshotTaskQueue {
   }
 }
 
+/**
+ * @public
+ */
 export class Page extends EventEmitter {
   static async create(
     client: CDPSession,
@@ -165,6 +168,16 @@ export class Page extends EventEmitter {
     if (defaultViewport) await page.setViewport(defaultViewport);
     return page;
   }
+
+  /**
+   * All the events that a page instance may emit.
+   */
+  static EmittedEvents = {
+    /**
+     * Emitted when a dedicated {@link https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API | WebWorker} is spawned by the page.
+     */
+    WorkerCreated: 'workercreated',
+  };
 
   private _closed = false;
   private _client: CDPSession;
@@ -188,6 +201,9 @@ export class Page extends EventEmitter {
 
   private _disconnectPromise?: Promise<Error>;
 
+  /**
+   * @internal
+   */
   constructor(client: CDPSession, target: Target, ignoreHTTPSErrors: boolean) {
     super();
     this._client = client;
@@ -226,7 +242,7 @@ export class Page extends EventEmitter {
         this._handleException.bind(this)
       );
       this._workers.set(event.sessionId, worker);
-      this.emit(Events.Page.WorkerCreated, worker);
+      this.emit(Page.EmittedEvents.WorkerCreated, worker);
     });
     client.on('Target.detachedFromTarget', (event) => {
       const worker = this._workers.get(event.sessionId);
