@@ -137,6 +137,17 @@ enum VisionDeficiency {
   tritanopia = 'tritanopia',
 }
 
+/**
+ * All the events that a page instance may emit.
+ */
+export const enum PageEmittedEvents {
+  /**
+   * Emitted when a dedicated {@link https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API | WebWorker} is spawned by the page.
+   * @eventProperty
+   */
+  WorkerCreated = 'workercreated',
+}
+
 class ScreenshotTaskQueue {
   _chain: Promise<Buffer | string | void>;
 
@@ -154,9 +165,52 @@ class ScreenshotTaskQueue {
 }
 
 /**
+ * Page provides methods to interact with a single tab or [extension background page](https://developer.chrome.com/extensions/background_pages) in Chromium. One [Browser] instance might have multiple [Page] instances.
+ *
+ * @remarks
+ *
+ * @example
+ * This example creates a page, navigates it to a URL, and then * saves a screenshot:
+ * ```js
+ * const puppeteer = require('puppeteer');
+ *
+ * (async () => {
+ *   const browser = await puppeteer.launch();
+ *   const page = await browser.newPage();
+ *   await page.goto('https://example.com');
+ *   await page.screenshot({path: 'screenshot.png'});
+ *   await browser.close();
+ * })();
+ * ```
+ *
+ * The Page class emits various events which are documented in the {@link PageEmittedEvents} enum.
+ *
+ * @example
+ * This example logs a message for a single page `load` event:
+ * ```js
+ * page.once('load', () => console.log('Page loaded!'));
+ * ```
+ *
+ * To unsubscribe from events use the `off` method:
+ *
+ * ```js
+ * function logRequest(interceptedRequest) {
+ *   console.log('A request was made:', interceptedRequest.url());
+ * }
+ * page.on('request', logRequest);
+ * // Sometime later...
+ * page.off('request', logRequest);
+ * ```
  * @public
  */
 export class Page extends EventEmitter {
+  /**
+   * Creates a new instance of the Page class
+   * @param client
+   * @param target
+   * @param ignoreHTTPSErrors
+   * @param defaultViewport
+   */
   static async create(
     client: CDPSession,
     target: Target,
@@ -168,16 +222,6 @@ export class Page extends EventEmitter {
     if (defaultViewport) await page.setViewport(defaultViewport);
     return page;
   }
-
-  /**
-   * All the events that a page instance may emit.
-   */
-  static EmittedEvents = {
-    /**
-     * Emitted when a dedicated {@link https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API | WebWorker} is spawned by the page.
-     */
-    WorkerCreated: 'workercreated',
-  };
 
   private _closed = false;
   private _client: CDPSession;
@@ -242,7 +286,7 @@ export class Page extends EventEmitter {
         this._handleException.bind(this)
       );
       this._workers.set(event.sessionId, worker);
-      this.emit(Page.EmittedEvents.WorkerCreated, worker);
+      this.emit(PageEmittedEvents.WorkerCreated, worker);
     });
     client.on('Target.detachedFromTarget', (event) => {
       const worker = this._workers.get(event.sessionId);
@@ -387,11 +431,11 @@ export class Page extends EventEmitter {
     return this._target.browserContext();
   }
 
-  _onTargetCrashed(): void {
+  private _onTargetCrashed(): void {
     this.emit('error', new Error('Page crashed!'));
   }
 
-  _onLogEntryAdded(event: Protocol.Log.entryAddedPayload): void {
+  private _onLogEntryAdded(event: Protocol.Log.entryAddedPayload): void {
     const { level, text, args, source, url, lineNumber } = event.entry;
     if (args) args.map((arg) => helper.releaseObject(this._client, arg));
     if (source !== 'worker')
@@ -875,7 +919,7 @@ export class Page extends EventEmitter {
     return this._go(+1, options);
   }
 
-  async _go(
+  private async _go(
     delta: number,
     options: WaitForOptions
   ): Promise<HTTPResponse | null> {
@@ -1088,7 +1132,7 @@ export class Page extends EventEmitter {
     );
   }
 
-  async _screenshotTask(
+  private async _screenshotTask(
     format: 'png' | 'jpeg',
     options?: ScreenshotOptions
   ): Promise<Buffer | string> {
